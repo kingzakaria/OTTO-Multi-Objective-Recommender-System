@@ -3,3 +3,6 @@ data/*
 __pycache__/
 *.parquet
 submission.csv
+.venv/
+data/*
+!data/.gitkeep
