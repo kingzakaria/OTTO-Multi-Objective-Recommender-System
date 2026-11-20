@@ -6,3 +6,4 @@ submission.csv
 .venv/
 data/*
 !data/.gitkeep
+submission.zip
