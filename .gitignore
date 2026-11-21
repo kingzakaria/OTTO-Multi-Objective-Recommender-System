@@ -7,3 +7,5 @@ submission.csv
 data/*
 !data/.gitkeep
 submission.zip
+submission_s20*
+*.gz

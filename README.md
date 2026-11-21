@@ -3,7 +3,7 @@
 A session-based recommender for e-commerce, built for the Kaggle competition
 [OTTO – Multi-Objective Recommender System](https://www.kaggle.com/competitions/otto-recommender-system).
 
-**Current result (v1, co-visitation baseline): Kaggle public score 0.55687 / private score 0.55776**
+**Current best result (v1b, co-visitation baseline, 20% of train): Kaggle public score 0.56156 / private score 0.56189**
 (late submission, after the competition deadline).
 
 ## 1. Description
@@ -40,7 +40,10 @@ Orders carry 60% of the score.
 
 | Version | Method | Public score | Private score |
 |---------|--------|--------------|---------------|
-| v1 | Co-visitation baseline (no ML model), 10% of train sessions | **0.55687** | **0.55776** |
+| v1 | Co-visitation baseline (no ML model), 10% of train sessions | 0.55687 | 0.55776 |
+| v1b | Same method, 20% of train sessions | **0.56156** | **0.56189** |
+
+Doubling the training sample gave about +0.005, so more data alone helps only a little. The next gain has to come from a learned ranker (see the roadmap).
 
 ### Local validation of v1 (5% sample, last 7 days held out)
 
@@ -95,11 +98,12 @@ python -m src.run convert --src data/test.jsonl  --dst data/test.parquet
 # 2. local validation on 5% of the sessions
 python -m src.run validate --train data/train.parquet --sample 0.05
 
-# 3. create the submission (10% of train sessions, all test sessions)
-python -m src.run submit --train data/train.parquet --test data/test.parquet --sample 0.1 --out submission.csv
+# 3. create the submission (20% of train sessions, all test sessions)
+python -m src.run submit --train data/train.parquet --test data/test.parquet --sample 0.2 --out submission.csv.gz
 ```
 
-The submission file must have 5,015,409 rows plus a header. Zip it and upload it on the Kaggle submission page.
+The submission file must have 5,015,409 rows plus a header. A `.csv.gz` file is accepted by Kaggle, so it can be uploaded directly.
+You can delete the large `.jsonl` files after conversion to save disk space (about 11 GB).
 
 Notes:
 - `submit` prints nothing until it finishes, and takes a long time because it predicts for about 1.67M sessions.
@@ -110,7 +114,7 @@ Notes:
 | Phase | Goal | Status |
 |-------|------|--------|
 | 0. Setup | Environment, data, parquet conversion | Done |
-| 1. Baseline | Co-visitation pipeline, validation, first submission | Done (public 0.55687) |
+| 1. Baseline | Co-visitation pipeline, validation, first submissions | Done (public 0.55687 → 0.56156 with 20% of train) |
 | 2. Analysis | Notebook on session lengths, event mix, item popularity | To do |
 | 3. Better candidates | item2vec (gensim), tuned co-visitation, buy→buy matrix; measure candidate recall | To do |
 | 4. Ranker | Features + LightGBM ranker, one model per target, orders first | To do |
@@ -126,7 +130,7 @@ Sequence models (GRU or Transformer) are an optional later addition as an extra 
 
 ## 7. Limitations
 - v1 has no learned model, so it cannot weigh signals against each other.
-- Only 10% of the training sessions are used for the submission because of memory limits.
+- Only 10% to 20% of the training sessions are used for the submissions because of memory limits.
 - The leaderboard score is from a late submission, so it is not an official ranking.
 
 ## 8. References
