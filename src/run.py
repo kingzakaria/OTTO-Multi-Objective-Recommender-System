@@ -55,9 +55,37 @@ def cmd_submit(args):
     print(f"wrote {args.out} ({len(rows):,} rows)")
 
 
+def cmd_rank(args):
+    from .ranker import fit
+    fit(load(args.train, args.sample), args)
+
+
+def cmd_rank_submit(args):
+    from .ranker import run_submit
+    run_submit(load(args.train, args.sample), load(args.test), args)
+
+
+def add_rank_args(p):
+    p.add_argument("--train", required=True)
+    p.add_argument("--sample", type=float, default=0.05)
+    p.add_argument("--val-days", type=int, default=7, dest="val_days")
+    p.add_argument("--max-sessions", type=int, default=40000, dest="max_sessions",
+                   help="sessions used to train the rankers (more = better but needs more RAM/time)")
+    p.add_argument("--n-estimators", type=int, default=300, dest="n_estimators")
+
+
 def main():
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    rk = sub.add_parser("rank", help="v2: train LightGBM rankers and print a validation report")
+    add_rank_args(rk)
+
+    rs = sub.add_parser("rank-submit", help="v2: train rankers, then predict the test set")
+    add_rank_args(rs)
+    rs.add_argument("--test", required=True)
+    rs.add_argument("--out", default="submission_v2.csv.gz")
+    rs.add_argument("--batch", type=int, default=50000, help="test sessions per prediction batch")
 
     c = sub.add_parser("convert")
     c.add_argument("--src", required=True)
@@ -79,6 +107,10 @@ def main():
         jsonl_to_parquet(args.src, args.dst)
     elif args.cmd == "validate":
         cmd_validate(args)
+    elif args.cmd == "rank":
+        cmd_rank(args)
+    elif args.cmd == "rank-submit":
+        cmd_rank_submit(args)
     else:
         cmd_submit(args)
 

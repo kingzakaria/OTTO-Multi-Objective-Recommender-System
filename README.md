@@ -78,6 +78,7 @@ The last 7 days of train become validation sessions. Each is cut at a random poi
 | `src/covisit.py`   | co-visitation matrices (`recency` and `type` weighted)                     |
 | `src/recommend.py` | baseline: session items → co-visitation neighbours → popular items         |
 | `src/evaluate.py`  | the joint recall@20 metric                                                 |
+| `src/ranker.py`    | v2: candidates, features, item2vec, LightGBM rankers, batch prediction     |
 | `src/run.py`       | command line: `convert`, `validate`, `submit`                              |
 
 ## 5. How to run
@@ -109,6 +110,29 @@ Notes:
 - `submit` prints nothing until it finishes, and takes a long time because it predicts for about 1.67M sessions.
 - If memory runs out, lower `--sample`.
 
+### Notebook (for presentation)
+
+`otto_recommender.ipynb` runs the whole project cell by cell, with matplotlib graphs: data exploration, validation split, baseline, the **LightGBM training cell with training curves**, feature importance, baseline-vs-v2 comparison and the Kaggle scores.
+
+Open it in VS Code (select the `.venv` kernel) or Jupyter and choose *Run All*. Settings are in the first code cells:
+- `SAMPLE = 0.02` gives a quick demo (a few minutes); `SAMPLE = 0.05` is the setting used for the reported results (about 15 minutes the first time).
+- The slow co-visitation tables are cached in `data/` (`cache_resources_*.pkl`), so later runs are fast.
+
+### v2 (LightGBM ranker)
+
+```powershell
+pip install -r requirements.txt   # adds lightgbm and gensim
+
+# validation report: candidate recall, baseline vs v2 recall@20 per target (start small)
+python -m src.run rank --train data/train.parquet --sample 0.05 --max-sessions 40000
+
+# train and write a submission (prints progress)
+python -m src.run rank-submit --train data/train.parquet --test data/test.parquet --sample 0.1 --max-sessions 100000 --out submission_v2.csv.gz
+```
+
+`--max-sessions` is the number of sessions the rankers learn from. More sessions usually give a better model but need more RAM and time.
+The v2 code was tested end to end on synthetic data only. It has not been run on the real data yet.
+
 ## 6. Roadmap
 
 | Phase | Goal | Status |
@@ -116,15 +140,17 @@ Notes:
 | 0. Setup | Environment, data, parquet conversion | Done |
 | 1. Baseline | Co-visitation pipeline, validation, first submissions | Done (public 0.55687 → 0.56156 with 20% of train) |
 | 2. Analysis | Notebook on session lengths, event mix, item popularity | To do |
-| 3. Better candidates | item2vec (gensim), tuned co-visitation, buy→buy matrix; measure candidate recall | To do |
-| 4. Ranker | Features + LightGBM ranker, one model per target, orders first | To do |
+| 3. Better candidates | item2vec similarity as a feature (done in code), candidate recall report (done in code); item2vec as a candidate source, tuned co-visitation, buy→buy matrix still to do | Code written, not yet run on real data |
+| 4. Ranker | Features + LightGBM ranker, one model per target | Code written, not yet run on real data |
 | 5. Scale up | More training sessions, tuning | To do |
 
-### Planned ranker (v2)
-Candidates from several sources are scored by **LightGBM** (`LGBMRanker`, one model per target). Training examples come from sessions in the last week, with candidates labelled 1 if they appear in the ground truth. Planned features:
-- **Session:** length, number of clicks/carts/orders, time since the last event.
-- **Item:** global click, cart and order counts and their ratios.
-- **Session × item:** already seen or carted, co-visitation score and rank, embedding similarity to the last item.
+### v2 ranker (implemented in `src/ranker.py`, real-data results pending)
+For each session, up to 100 candidates are collected: the session's own items (at most 30), co-visitation neighbours, and popular items as a fallback. Each candidate is scored by **LightGBM** (`LGBMRanker`, lambdarank, one model per target). The rankers learn from sessions of the last week, cut at random points; a candidate is labelled 1 if the user really did that action on it afterwards. The co-visitation tables, popularity and item2vec are built only from earlier sessions, so there is no leakage. Features (17):
+- **Session:** length, number of carts and orders, duration, type of the last event.
+- **Item:** global click, cart and order counts (log).
+- **Session × item:** weighted seen score, counts in the session, steps since last touched, co-visitation scores (recency and type), item2vec similarity to the last item and to the recent items.
+
+Known simplifications: item2vec is used only as a feature, not to find extra candidates, and at submission time the co-visitation tables are rebuilt from train + test while item2vec stays from the earlier sessions.
 
 Sequence models (GRU or Transformer) are an optional later addition as an extra candidate source.
 
